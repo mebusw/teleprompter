@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>提词器</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- <script src="./cdn-tailwindcss-com.3.4.16.js"></script> -->
+    <!-- Marked.js CDN for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- <script src="./marked.min.js"></script> -->
+    
+    <style>
+        /* Custom styles for full-screen mode and scrollbar hiding */
+        html, body { /* Ensure html and body take full height */
+            height: 100%;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden; /* Prevent body scrollbar */
+            display: flex; /* Use flexbox for centering app-container */
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh; /* Use vh for explicit viewport height */
+            background-color: #f3f4f6; /* Tailwind bg-gray-100 */
+        }
+        .teleprompter-container {
+            transition: all 0.3s ease-in-out;
+        }
+        /* The base teleprompter-content class for general styling */
+        .teleprompter-content {
+            overflow-y: auto; /* Enable scrolling for content */
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+            padding: 2rem; /* Default padding for content */
+            box-sizing: border-box; /* Ensure padding is included in width/height */
+        }
+        /* Hide scrollbar for Webkit browsers */
+        .teleprompter-content::-webkit-scrollbar {
+            display: none;
+        }
+        /* 为提词器内渲染的Markdown元素添加样式 */
+        .teleprompter-content h1,
+        .teleprompter-content h2,
+        .teleprompter-content h3,
+        .teleprompter-content h4,
+        .teleprompter-content h5,
+        .teleprompter-content h6 {
+            font-weight: bold; /* 恢复标题的粗体样式 */
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+            line-height: 1.2; /* 标题行距通常更紧凑 */
+        }
+        .teleprompter-content h1 { font-size: 1.6em; } /* 1.6倍基础字号 */
+        .teleprompter-content h2 { font-size: 1.4em; } /* 1.4倍基础字号 */
+        .teleprompter-content h3 { font-size: 1.2em; } /* 1.2倍基础字号 */
+        .teleprompter-content h4 { font-size: 1.1em; }
+        .teleprompter-content h5 { font-size: 1.0em; }
+        .teleprompter-content h6 { font-size: 0.9em; }
+        .teleprompter-content p {
+            margin-bottom: 0.8em; /* 增加段落间距，提高可读性 */
+        }
+        /* Styles when in full-screen mode, applied directly to #teleprompter-display */
+        .fullscreen-active {
+            @apply fixed inset-0 z-50 bg-black text-white;
+            display: block; /* Ensure it behaves as a block element */
+            width: 100%; /* Take full viewport width */
+            height: 100%; /* Take full viewport height */
+            overflow-y: auto; /* Enable scrolling for this element */
+            scroll-behavior: smooth; /* For smoother manual scrolling */
+            box-sizing: border-box; /* Crucial: Include padding in element's total height */
+            padding: 2rem; /* Apply padding directly to the scrollable element */
+        }
+        /* Remove the nested rule as .teleprompter-content is the same element when .fullscreen-active */
+        /* .fullscreen-active .teleprompter-content { ... } */
+
+        .controls-hidden {
+            display: none !important;
+        }
+
+        /* Message Box Styles */
+        .message-box-overlay {
+            @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100];
+        }
+        .message-box {
+            @apply bg-white p-6 rounded-lg shadow-lg max-w-sm text-center;
+        }
+        .message-box-title {
+            @apply text-xl font-bold text-gray-800 mb-4;
+        }
+        .message-box-message {
+            @apply text-gray-700 mb-6;
+        }
+        .message-box-button {
+            @apply bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div id="app-container" class="teleprompter-container bg-white p-8 rounded-lg shadow-xl w-full max-w-4xl flex flex-col space-y-6">
+        <h1 class="text-3xl font-bold text-gray-800 text-center mb-6">提词器</h1>
+
+        <!-- Markdown Input -->
+        <div>
+            <label for="markdown-input" class="block text-sm font-medium text-gray-700 mb-2">输入 Markdown 文本:</label>
+            <textarea id="markdown-input"
+                      class="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 h-64 text-gray-800"
+                      placeholder="在这里输入您的Markdown文本..."># 欢迎使用提词器
+
+这是一个简单的提词器应用，支持Markdown文本输入和全屏滚动播放。
+
+## 功能特点
+
+* **Markdown 支持**: 您可以使用Markdown语法来格式化您的文本，例如：
+    * **粗体** 和 *斜体*
+    * `行内代码`
+    * [链接](https://www.google.com)
+    * 无序列表:
+        * 项目 1
+        * 项目 2
+    * 有序列表:
+        1.  第一项
+        2.  第二项
+
+* **全屏播放**: 点击“启动提词器”按钮进入全屏模式，文本将自动向上滚动。
+
+* **自定义设置**:
+    * **字体大小**: 选择“小”、“中”或“大”来调整文本大小。
+    * **滚动速度**: 使用滑动条调整文本滚动的速度（行/分钟）。
+
+* **手动控制**: 在全屏模式下，您可以使用鼠标滚轮或触控板进行手动滚动，这会暂停自动滚动。
+
+## 如何使用
+
+1.  在上面的文本框中输入或粘贴您的演讲稿、歌词或其他需要提示的文本。
+2.  使用Markdown语法进行排版，例如使用`#`创建标题，`**`创建粗体字。
+3.  根据您的需求调整字体大小和滚动速度。
+4.  点击“启动提词器 (全屏)”按钮。
+5.  在全屏模式下，文本将自动滚动。如果您需要暂停或快速跳过某段，可以使用鼠标滚轮或触控板。
+6.  按下 `Esc` 键或再次点击按钮即可退出全屏模式。
+
+## 提示
+
+* 确保您的浏览器允许网站进入全屏模式。
+* 为了获得最佳体验，请在安静的环境中使用。
+
+希望您喜欢这个提词器！
+</textarea>
+        </div>
+
+        <!-- Settings -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Font Size Radio Buttons -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">字体大小:</label>
+                <div class="flex space-x-4">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="font-size-radio" value="56" class="form-radio text-blue-600">
+                        <span class="ml-2 text-gray-700">小</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="font-size-radio" value="128" class="form-radio text-blue-600" checked>
+                        <span class="ml-2 text-gray-700">中</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="font-size-radio" value="200" class="form-radio text-blue-600">
+                        <span class="ml-2 text-gray-700">大</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Scroll Speed Slider (Lines per Minute) -->
+            <div>
+                <label for="scroll-speed-slider" class="block text-sm font-medium text-gray-700 mb-2">滚动速度 (行/分钟):</label>
+                <!-- Default to 60 lines/minute (1 line per second) -->
+                <input type="range" id="scroll-speed-slider" min="1" max="80" value="32"
+                       class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-lg">
+                <span id="scroll-speed-value" class="block text-sm text-gray-600 text-center mt-1">32 行/分钟</span>
+            </div>
+
+            <!-- Horizontal Padding Slider -->
+            <div>
+                <label for="padding-slider" class="block text-sm font-medium text-gray-700 mb-2">全屏左右边距:</label>
+                <input type="range" id="padding-slider" min="0" max="50" value="25"
+                       class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-lg">
+                <span id="padding-value" class="block text-sm text-gray-600 text-center mt-1">5%</span>
+            </div>
+        </div>
+
+        <!-- Control Button -->
+        <button id="toggle-teleprompter"
+                class="w-full bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 ease-in-out shadow-md">
+            启动全屏滚动（回车/空格）
+        </button>
+        <div class="text-sm text-center">按Esc退出全屏，也可以手动滚屏</div>
+        <div class="text-sm text-center">© 2025 UPerform AI Labs </div>
+    </div>
+
+    <!-- Teleprompter Display Area (initially hidden) -->
+    <div id="teleprompter-display" class="teleprompter-content hidden">
+        <!-- Markdown content will be rendered here -->
+    </div>
+
+    <!-- Custom Message Box -->
+    <div id="message-box-overlay" class="message-box-overlay hidden">
+        <div class="message-box">
+            <h3 id="message-box-title" class="message-box-title"></h3>
+            <p id="message-box-message" class="message-box-message"></p>
+            <button id="message-box-ok" class="message-box-button">确定</button>
+        </div>
+    </div>
+
+    <script>
+        // Get DOM elements
+        const appContainer = document.getElementById('app-container');
+        const markdownInput = document.getElementById('markdown-input');
+        const fontSizeRadios = document.querySelectorAll('input[name="font-size-radio"]');
+        const scrollSpeedSlider = document.getElementById('scroll-speed-slider');
+        const scrollSpeedValueSpan = document.getElementById('scroll-speed-value');
+        const toggleButton = document.getElementById('toggle-teleprompter');
+        const paddingSlider = document.getElementById('padding-slider');
+        const paddingValueSpan = document.getElementById('padding-value');
+        const teleprompterDisplay = document.getElementById('teleprompter-display');
+
+        const messageBoxOverlay = document.getElementById('message-box-overlay');
+        const messageBoxTitle = document.getElementById('message-box-title');
+        const messageBoxMessage = document.getElementById('message-box-message');
+        const messageBoxOkButton = document.getElementById('message-box-ok');
+
+        // Local Storage Keys
+        const LS_KEYS = {
+            TEXT: 'teleprompter_text',
+            FONT_SIZE: 'teleprompter_fontSize',
+            SCROLL_SPEED: 'teleprompter_scrollSpeed',
+            PADDING: 'teleprompter_padding'
+        };
+
+        // Centralized default settings
+        const DEFAULTS = {
+            FONT_SIZE: 128,
+            SCROLL_SPEED: 10,
+            PADDING: 15
+        };
+
+        let scrollInterval = null;
+        let manualScrollTimeout = null; // New variable for manual scroll pause
+        const MANUAL_SCROLL_PAUSE_DURATION = 500; // milliseconds
+        let textSaveTimeout = null; // For debouncing text input saving
+
+        let isFullscreen = false;
+        // Default values, will be overridden by localStorage if available
+        let currentFontSize = DEFAULTS.FONT_SIZE;
+        let currentScrollSpeedLPM = DEFAULTS.SCROLL_SPEED;
+        let currentHorizontalPadding = DEFAULTS.PADDING;
+        const lineHeightMultiplier = 1.5; // From CSS: line-height: 1.5;
+
+        // Initialize Marked.js
+        marked.setOptions({
+            gfm: true, // Use GitHub Flavored Markdown
+            breaks: true, // Add <br> on a single newline
+        });
+
+        // Function to show custom message box
+        function showMessageBox(title, message) {
+            messageBoxTitle.textContent = title;
+            messageBoxMessage.textContent = message;
+            messageBoxOverlay.classList.remove('hidden');
+        }
+
+        // Hide message box on OK button click
+        messageBoxOkButton.addEventListener('click', () => {
+            messageBoxOverlay.classList.add('hidden');
+        });
+
+        // Function to load state from Local Storage
+        function loadState() {
+            // Load text. If nothing is saved, the default text from the HTML will be used.
+            const savedText = localStorage.getItem(LS_KEYS.TEXT);
+            if (savedText !== null) {
+                markdownInput.value = savedText;
+            }
+
+            // Load settings, falling back to DEFAULTS if a value isn't found in localStorage
+            currentFontSize = parseInt(localStorage.getItem(LS_KEYS.FONT_SIZE) || DEFAULTS.FONT_SIZE, 10);
+            currentScrollSpeedLPM = parseInt(localStorage.getItem(LS_KEYS.SCROLL_SPEED) || DEFAULTS.SCROLL_SPEED, 10);
+            currentHorizontalPadding = parseInt(localStorage.getItem(LS_KEYS.PADDING) || DEFAULTS.PADDING, 10);
+        }
+
+        // Function to make all UI controls (sliders, radios) match the current state variables
+        function syncUIToState() {
+            // Sync font size radio button
+            const radioToSelect = document.querySelector(`input[name="font-size-radio"][value="${currentFontSize}"]`);
+            if (radioToSelect) radioToSelect.checked = true;
+
+            // Sync scroll speed slider and its text display
+            scrollSpeedSlider.value = currentScrollSpeedLPM;
+            scrollSpeedValueSpan.textContent = `${currentScrollSpeedLPM} 行/分钟`;
+
+            // Sync padding slider and its text display
+            paddingSlider.value = currentHorizontalPadding;
+            paddingValueSpan.textContent = `${currentHorizontalPadding}%`;
+        }
+
+        // Function to render Markdown to HTML
+        function renderMarkdown() {
+            const markdownText = "" + markdownInput.value + "<br><br><br>";
+            teleprompterDisplay.innerHTML = marked.parse(markdownText);
+            teleprompterDisplay.style.fontSize = `${currentFontSize}px`;
+            teleprompterDisplay.style.lineHeight = `${lineHeightMultiplier}`; // Adjust line height for readability
+            // Note: Padding is now handled by the .teleprompter-content class directly.
+            // teleprompterDisplay.style.padding = '2rem'; // Removed this line
+            teleprompterDisplay.scrollTop = 0; // Reset scroll position when content changes
+            // Add a small delay to allow browser to calculate layout before checking scrollHeight
+            setTimeout(() => {
+                console.log('After renderMarkdown - teleprompterDisplay dimensions:', {
+                    scrollHeight: teleprompterDisplay.scrollHeight,
+                    clientHeight: teleprompterDisplay.clientHeight
+                });
+            }, 0); // Small timeout to defer execution until after layout
+        }
+
+        // Function to calculate pixels per frame based on lines per minute
+        function calculatePixelsPerFrame(linesPerMinute, fontSize) {
+            const pixelsPerLine = fontSize * lineHeightMultiplier;
+            const pixelsPerMinute = linesPerMinute * pixelsPerLine;
+            // Assuming 60 frames per second (1000ms / 60 frames = ~16.67ms per frame)
+            const pixelsPerFrame = pixelsPerMinute / (60 * 60); // pixels per minute / (seconds per minute * frames per second)
+            console.log(`Calculated pixels per frame: ${pixelsPerFrame.toFixed(4)} for ${linesPerMinute} LPM and ${fontSize}px font.`);
+            return pixelsPerFrame;
+        }
+
+        // Function to start automatic scrolling
+        function startScrolling() {
+            if (scrollInterval) cancelAnimationFrame(scrollInterval); // Clear any existing animation frame
+
+            const pixelsPerFrame = calculatePixelsPerFrame(currentScrollSpeedLPM, currentFontSize);
+
+            // Only start scrolling if there's content to scroll
+            // Check if scrollHeight is greater than clientHeight, meaning content overflows
+            if (teleprompterDisplay.scrollHeight <= teleprompterDisplay.clientHeight) {
+                console.log('内容不足以滚动，停止自动滚动。');
+                stopScrolling(); // Ensure it's stopped if content is too short
+                return;
+            }
+
+            let lastTimestamp = null;
+            const animateScroll = (timestamp) => {
+                if (!lastTimestamp) lastTimestamp = timestamp;
+                const elapsed = timestamp - lastTimestamp;
+                lastTimestamp = timestamp;
+
+                // Calculate scroll amount based on elapsed time
+                // This ensures consistent speed regardless of actual frame rate
+                const scrollAmount = pixelsPerFrame * (elapsed / (1000 / 60));
+
+                console.log(`[Scroll Debug] Before scroll: scrollTop=${teleprompterDisplay.scrollTop.toFixed(2)}, scrollAmount=${scrollAmount.toFixed(4)}`);
+                teleprompterDisplay.scrollTop += scrollAmount;
+                console.log(`[Scroll Debug] After scroll: scrollTop=${teleprompterDisplay.scrollTop.toFixed(2)}, scrollHeight=${teleprompterDisplay.scrollHeight}, clientHeight=${teleprompterDisplay.clientHeight}`);
+
+
+                // Check if we've reached the end of the content
+                // Use a small buffer (e.g., 1px) for comparison to account for floating point inaccuracies
+                if (teleprompterDisplay.scrollTop + teleprompterDisplay.clientHeight >= teleprompterDisplay.scrollHeight - 1) {
+                    teleprompterDisplay.scrollTop = teleprompterDisplay.scrollHeight - teleprompterDisplay.clientHeight; // Snap to end
+                    stopScrolling();
+                    console.log('滚动到底部，自动滚动已停止。');
+                } else {
+                    scrollInterval = requestAnimationFrame(animateScroll);
+                }
+            };
+
+            scrollInterval = requestAnimationFrame(animateScroll);
+        }
+
+        // Function to stop automatic scrolling
+        function stopScrolling() {
+            if (scrollInterval) {
+                cancelAnimationFrame(scrollInterval);
+                scrollInterval = null;
+            }
+        }
+
+        // Function to toggle full-screen mode and teleprompter
+        async function toggleTeleprompter() {
+            if (!isFullscreen) {
+                // Enter full screen
+                try {
+                    await document.documentElement.requestFullscreen();
+                    isFullscreen = true;
+                    appContainer.classList.add('controls-hidden'); // Hide controls
+                    teleprompterDisplay.classList.remove('hidden'); // Show teleprompter display
+                    teleprompterDisplay.classList.add('fullscreen-active'); // Apply full-screen styles
+                    // Apply dynamic horizontal padding
+                    teleprompterDisplay.style.paddingLeft = `${currentHorizontalPadding}%`;
+                    teleprompterDisplay.style.paddingRight = `${currentHorizontalPadding}%`;
+                    toggleButton.textContent = '退出提词器';
+                    renderMarkdown(); // Render content before starting scroll
+                    // Give a small delay to ensure content layout is complete before starting scroll
+                    setTimeout(() => {
+                        console.log('Before starting scroll - teleprompterDisplay dimensions (after timeout):', {
+                            scrollHeight: teleprompterDisplay.scrollHeight,
+                            clientHeight: teleprompterDisplay.clientHeight
+                        });
+                        startScrolling();
+                    }, 300); // Increased delay to 300ms
+                } catch (err) {
+                    console.error(`Error attempting to enable full-screen: ${err.message}`);
+                    showMessageBox('无法进入全屏模式', '浏览器可能阻止了它，或者您不在用户手势触发的事件中。请确保您点击了按钮。');
+                }
+            } else {
+                // Exit full screen
+                if (document.exitFullscreen) {
+                    await document.exitFullscreen();
+                }
+                isFullscreen = false;
+                stopScrolling();
+                // Clear any pending manual scroll timeout
+                if (manualScrollTimeout) {
+                    clearTimeout(manualScrollTimeout);
+                    manualScrollTimeout = null;
+                }
+                appContainer.classList.remove('controls-hidden'); // Show controls
+                teleprompterDisplay.classList.add('hidden'); // Hide teleprompter display
+                teleprompterDisplay.classList.remove('fullscreen-active'); // Remove full-screen styles
+                toggleButton.textContent = '启动全屏滚动（回车/空格）';
+            }
+        }
+
+        // Event Listeners
+
+        // Toggle teleprompter on button click
+        toggleButton.addEventListener('click', toggleTeleprompter);
+
+        // Update font size on radio button change
+        fontSizeRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                currentFontSize = parseInt(e.target.value);
+                localStorage.setItem(LS_KEYS.FONT_SIZE, currentFontSize); // Save setting
+                renderMarkdown(); // Re-render to apply new font size
+                // If currently in full screen, restart scrolling with new speed/font size
+                if (isFullscreen) {
+                    stopScrolling(); // Stop current animation frame loop
+                    // Clear any pending manual scroll timeout
+                    if (manualScrollTimeout) {
+                        clearTimeout(manualScrollTimeout);
+                        manualScrollTimeout = null;
+                    }
+                    // Give a small delay to ensure content layout is complete before starting scroll
+                    setTimeout(() => {
+                        startScrolling();
+                    }, 100); // Adjusted delay for setting changes
+                }
+            });
+        });
+
+        // Update scroll speed on slider change
+        scrollSpeedSlider.addEventListener('input', (e) => {
+            currentScrollSpeedLPM = parseInt(e.target.value);
+            scrollSpeedValueSpan.textContent = `${currentScrollSpeedLPM} 行/分钟`;
+            localStorage.setItem(LS_KEYS.SCROLL_SPEED, currentScrollSpeedLPM); // Save setting
+            // If currently in full screen, restart scrolling with new speed
+            if (isFullscreen) {
+                stopScrolling(); // Stop current animation frame loop
+                // Clear any pending manual scroll timeout
+                if (manualScrollTimeout) {
+                    clearTimeout(manualScrollTimeout);
+                    manualScrollTimeout = null;
+                }
+                // Give a small delay to ensure content layout is complete before starting scroll
+                setTimeout(() => {
+                    startScrolling();
+                }, 100); // Adjusted delay for setting changes
+                }
+        });
+
+        // Update horizontal padding on slider change
+        paddingSlider.addEventListener('input', (e) => {
+            currentHorizontalPadding = parseInt(e.target.value);
+            paddingValueSpan.textContent = `${currentHorizontalPadding}%`;
+            localStorage.setItem(LS_KEYS.PADDING, currentHorizontalPadding); // Save setting
+            // If in fullscreen, apply the change immediately.
+            if (isFullscreen) {
+                teleprompterDisplay.style.paddingLeft = `${currentHorizontalPadding}%`;
+                teleprompterDisplay.style.paddingRight = `${currentHorizontalPadding}%`;
+            }
+        });
+
+        // Re-render markdown on input change in textarea
+        markdownInput.addEventListener('input', () => {
+            // Debounce saving to localStorage to avoid excessive writes
+            clearTimeout(textSaveTimeout);
+            textSaveTimeout = setTimeout(() => {
+                localStorage.setItem(LS_KEYS.TEXT, markdownInput.value);
+                console.log('Text saved to localStorage.');
+            }, 500); // Save 500ms after user stops typing
+
+            renderMarkdown();
+        });
+
+        // Handle manual scrolling (mouse wheel/trackpad)
+        teleprompterDisplay.addEventListener('wheel', (e) => {
+            if (isFullscreen) {
+                console.log('Wheel event detected in full screen. Current scrollTop:', teleprompterDisplay.scrollTop, 'DeltaY:', e.deltaY);
+
+                // Stop auto-scrolling immediately
+                if (scrollInterval) {
+                    stopScrolling();
+                    console.log('自动滚动已暂停，进行手动滚动。');
+                }
+
+                // Clear any existing timeout to prevent immediate restart
+                if (manualScrollTimeout) {
+                    clearTimeout(manualScrollTimeout);
+                }
+
+                // Set a new timeout to restart auto-scrolling after a brief pause
+                manualScrollTimeout = setTimeout(() => {
+                    console.log('手动滚动暂停结束，尝试恢复自动滚动。');
+                    startScrolling();
+                }, MANUAL_SCROLL_PAUSE_DURATION);
+
+                // Allow default scroll behavior - browser will handle the scrolling
+                // No e.preventDefault() here, so native scroll should work.
+            }
+        });
+
+        // Listen for full-screen change event (e.g., user presses Esc)
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement && isFullscreen) {
+                // If full screen is exited by user (e.g., Esc key), reset state
+                isFullscreen = false;
+                stopScrolling();
+                // Clear any pending manual scroll timeout
+                if (manualScrollTimeout) {
+                    clearTimeout(manualScrollTimeout);
+                    manualScrollTimeout = null;
+                }
+                appContainer.classList.remove('controls-hidden');
+                teleprompterDisplay.classList.add('hidden');
+                teleprompterDisplay.classList.remove('fullscreen-active');
+                toggleButton.textContent = '启动提词器 (全屏)';
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // --- Fullscreen-only shortcuts for adjustments ---
+            if (isFullscreen) {
+                let needsRestart = false;
+
+                // Handle arrow keys for adjustments
+                if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    e.preventDefault(); // Prevent default browser action (scrolling)
+
+                    switch (e.key) {
+                        case 'ArrowUp':
+                            currentScrollSpeedLPM = Math.min(parseInt(scrollSpeedSlider.max), currentScrollSpeedLPM + 1);
+                            localStorage.setItem(LS_KEYS.SCROLL_SPEED, currentScrollSpeedLPM);
+                            needsRestart = true;
+                            break;
+                        case 'ArrowDown':
+                            currentScrollSpeedLPM = Math.max(parseInt(scrollSpeedSlider.min), currentScrollSpeedLPM - 1);
+                            localStorage.setItem(LS_KEYS.SCROLL_SPEED, currentScrollSpeedLPM);
+                            needsRestart = true;
+                            break;
+                        case 'ArrowRight': // 增加边距
+                            currentHorizontalPadding = Math.min(parseInt(paddingSlider.max), currentHorizontalPadding + 1);
+                            localStorage.setItem(LS_KEYS.PADDING, currentHorizontalPadding);
+                            teleprompterDisplay.style.paddingLeft = `${currentHorizontalPadding}%`;
+                            teleprompterDisplay.style.paddingRight = `${currentHorizontalPadding}%`;
+                            break;
+                        case 'ArrowLeft': // 减少边距
+                            currentHorizontalPadding = Math.max(parseInt(paddingSlider.min), currentHorizontalPadding - 1);
+                            localStorage.setItem(LS_KEYS.PADDING, currentHorizontalPadding);
+                            teleprompterDisplay.style.paddingLeft = `${currentHorizontalPadding}%`;
+                            teleprompterDisplay.style.paddingRight = `${currentHorizontalPadding}%`;
+                            break;
+                    }
+
+                    // After changing a value, sync the UI controls (sliders, text)
+                    syncUIToState();
+
+                    if (needsRestart) {
+                        stopScrolling();
+                        if (manualScrollTimeout) clearTimeout(manualScrollTimeout);
+                        manualScrollTimeout = null;
+                        setTimeout(startScrolling, 50); // Restart with new speed
+                    }
+                }
+            }
+
+            // --- Global shortcut to toggle fullscreen (when not typing) ---
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                if (e.key === ' ' || e.key === 'Enter') { // Spacebar or Enter key
+                    e.preventDefault(); // Prevent default browser action (e.g., spacebar scrolls page)
+                    toggleTeleprompter();
+                }
+            }
+        });
+
+
+        // Initial setup on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadState(); // Load saved state from localStorage
+            syncUIToState(); // Update all UI controls to reflect the loaded state
+            renderMarkdown(); // Initial render of markdown
+        });
+    </script>
+</body>
+</html>
