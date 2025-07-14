@@ -69,7 +69,6 @@
             width: 100%; /* Take full viewport width */
             height: 100%; /* Take full viewport height */
             overflow-y: auto; /* Enable scrolling for this element */
-            scroll-behavior: smooth; /* For smoother manual scrolling */
             box-sizing: border-box; /* Crucial: Include padding in element's total height */
             padding: 2rem; /* Apply padding directly to the scrollable element */
         }
@@ -173,11 +172,11 @@
 
             <!-- Scroll Speed Slider (Lines per Minute) -->
             <div>
-                <label for="scroll-speed-slider" class="block text-sm font-medium text-gray-700 mb-2">滚动速度 (行/分钟):</label>
+                <label for="scroll-speed-slider" class="block text-sm font-medium text-gray-700 mb-2">滚动速度:</label>
                 <!-- Default to 60 lines/minute (1 line per second) -->
-                <input type="range" id="scroll-speed-slider" min="1" max="80" value="32"
+                <input type="range" id="scroll-speed-slider" min="1" max="50" value="30"
                        class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-lg">
-                <span id="scroll-speed-value" class="block text-sm text-gray-600 text-center mt-1">32 行/分钟</span>
+                <span id="scroll-speed-value" class="block text-sm text-gray-600 text-center mt-1">30</span>
             </div>
 
             <!-- Horizontal Padding Slider -->
@@ -194,8 +193,9 @@
                 class="w-full bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 ease-in-out shadow-md">
             启动全屏滚动（回车/空格）
         </button>
-        <div class="text-sm text-center">按Esc退出全屏，也可以手动滚屏</div>
-        <div class="text-sm text-center">© 2025 UPerform AI Labs </div>
+        <div class="text-sm text-center text-gray-500">在输入框内可按 Cmd/Ctrl+Enter 进入全屏</div>
+        <div class="text-sm text-center text-gray-500">按Esc退出全屏，也可以手动滚屏</div>
+        <div class="text-sm text-center text-gray-500">© 2025 UPerform AI Labs </div>
     </div>
 
     <!-- Teleprompter Display Area (initially hidden) -->
@@ -240,7 +240,7 @@
         // Centralized default settings
         const DEFAULTS = {
             FONT_SIZE: 128,
-            SCROLL_SPEED: 10,
+            SCROLL_SPEED: 30,
             PADDING: 15
         };
 
@@ -296,7 +296,7 @@
 
             // Sync scroll speed slider and its text display
             scrollSpeedSlider.value = currentScrollSpeedLPM;
-            scrollSpeedValueSpan.textContent = `${currentScrollSpeedLPM} 行/分钟`;
+            scrollSpeedValueSpan.textContent = currentScrollSpeedLPM;
 
             // Sync padding slider and its text display
             paddingSlider.value = currentHorizontalPadding;
@@ -305,7 +305,8 @@
 
         // Function to render Markdown to HTML
         function renderMarkdown() {
-            const markdownText = "" + markdownInput.value + "<br><br><br>";
+            
+            const markdownText = "<br><br><br>" + markdownInput.value + "<br><br><br>";
             teleprompterDisplay.innerHTML = marked.parse(markdownText);
             teleprompterDisplay.style.fontSize = `${currentFontSize}px`;
             teleprompterDisplay.style.lineHeight = `${lineHeightMultiplier}`; // Adjust line height for readability
@@ -321,21 +322,23 @@
             }, 0); // Small timeout to defer execution until after layout
         }
 
-        // Function to calculate pixels per frame based on lines per minute
-        function calculatePixelsPerFrame(linesPerMinute, fontSize) {
+        // Function to calculate pixels per millisecond based on lines per minute
+        function calculatePixelsPerMillisecond(linesPerMinute, fontSize) {
             const pixelsPerLine = fontSize * lineHeightMultiplier;
             const pixelsPerMinute = linesPerMinute * pixelsPerLine;
-            // Assuming 60 frames per second (1000ms / 60 frames = ~16.67ms per frame)
-            const pixelsPerFrame = pixelsPerMinute / (60 * 60); // pixels per minute / (seconds per minute * frames per second)
-            console.log(`Calculated pixels per frame: ${pixelsPerFrame.toFixed(4)} for ${linesPerMinute} LPM and ${fontSize}px font.`);
-            return pixelsPerFrame;
+            const pixelsPerMillisecond = pixelsPerMinute / (60 * 1000); // pixels per minute / (seconds per minute * milliseconds per second)
+            console.log(`[DEBUG] Calculated pixels per millisecond: ${pixelsPerMillisecond.toFixed(6)} for ${linesPerMinute} LPM and ${fontSize}px font.`);
+            return pixelsPerMillisecond;
         }
 
         // Function to start automatic scrolling
         function startScrolling() {
             if (scrollInterval) cancelAnimationFrame(scrollInterval); // Clear any existing animation frame
 
-            const pixelsPerFrame = calculatePixelsPerFrame(currentScrollSpeedLPM, currentFontSize);
+            // Use 'auto' for programmatic scrolling to ensure linear speed
+            teleprompterDisplay.style.scrollBehavior = 'auto';
+
+            const pixelsPerMillisecond = calculatePixelsPerMillisecond(currentScrollSpeedLPM, currentFontSize);
 
             // Only start scrolling if there's content to scroll
             // Check if scrollHeight is greater than clientHeight, meaning content overflows
@@ -352,12 +355,12 @@
                 lastTimestamp = timestamp;
 
                 // Calculate scroll amount based on elapsed time
-                // This ensures consistent speed regardless of actual frame rate
-                const scrollAmount = pixelsPerFrame * (elapsed / (1000 / 60));
+                // Calculate scroll amount based on elapsed time and pixels per millisecond
+                const scrollAmount = pixelsPerMillisecond * elapsed;
 
-                console.log(`[Scroll Debug] Before scroll: scrollTop=${teleprompterDisplay.scrollTop.toFixed(2)}, scrollAmount=${scrollAmount.toFixed(4)}`);
+                // console.log(`[DEBUG] Before scroll: scrollTop=${teleprompterDisplay.scrollTop.toFixed(2)}, scrollAmount=${scrollAmount.toFixed(4)}`);
                 teleprompterDisplay.scrollTop += scrollAmount;
-                console.log(`[Scroll Debug] After scroll: scrollTop=${teleprompterDisplay.scrollTop.toFixed(2)}, scrollHeight=${teleprompterDisplay.scrollHeight}, clientHeight=${teleprompterDisplay.clientHeight}`);
+                // console.log(`[DEBUG] After scroll: scrollTop=${teleprompterDisplay.scrollTop.toFixed(2)}, scrollHeight=${teleprompterDisplay.scrollHeight}, clientHeight=${teleprompterDisplay.clientHeight}`);
 
 
                 // Check if we've reached the end of the content
@@ -380,6 +383,8 @@
                 cancelAnimationFrame(scrollInterval);
                 scrollInterval = null;
             }
+            // Restore smooth scrolling for manual interaction
+            teleprompterDisplay.style.scrollBehavior = 'smooth';
         }
 
         // Function to toggle full-screen mode and teleprompter
@@ -424,6 +429,7 @@
                 appContainer.classList.remove('controls-hidden'); // Show controls
                 teleprompterDisplay.classList.add('hidden'); // Hide teleprompter display
                 teleprompterDisplay.classList.remove('fullscreen-active'); // Remove full-screen styles
+                teleprompterDisplay.style.scrollBehavior = ''; // Reset inline style
                 toggleButton.textContent = '启动全屏滚动（回车/空格）';
             }
         }
@@ -458,7 +464,7 @@
         // Update scroll speed on slider change
         scrollSpeedSlider.addEventListener('input', (e) => {
             currentScrollSpeedLPM = parseInt(e.target.value);
-            scrollSpeedValueSpan.textContent = `${currentScrollSpeedLPM} 行/分钟`;
+            scrollSpeedValueSpan.textContent = currentScrollSpeedLPM;
             localStorage.setItem(LS_KEYS.SCROLL_SPEED, currentScrollSpeedLPM); // Save setting
             // If currently in full screen, restart scrolling with new speed
             if (isFullscreen) {
@@ -497,6 +503,14 @@
             }, 500); // Save 500ms after user stops typing
 
             renderMarkdown();
+        });
+
+        // Shortcut for starting teleprompter from textarea
+        markdownInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault(); // Prevent adding a new line
+                toggleTeleprompter();
+            }
         });
 
         // Handle manual scrolling (mouse wheel/trackpad)
